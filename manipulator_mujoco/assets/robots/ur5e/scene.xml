@@ -20,6 +20,8 @@
   <worldbody>
     <light pos="0 0 1.5" dir="0 0 -1" directional="true"/>
     <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
+    <camera name="camera1" pos="0 -0.1 1" fovy="90"/>
+    <camera name="camera2" pos="0 0.1 1" fovy="90"/>
   </worldbody>
 
 </mujoco>
