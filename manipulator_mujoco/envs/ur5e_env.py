@@ -21,11 +21,13 @@ class UR5eEnv(gym.Env):
     def __init__(self, render_mode=None):
         # TODO come up with an observation space that makes sense
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(6,), dtype=np.float64
+            low=-np.inf, high=np.inf, shape=(7,), dtype=np.float64
         )
 
         # TODO come up with an action space that makes sense
-        self.action_space = spaces.Box(low=-0.1, high=0.1, shape=(4,), dtype=np.float64)
+        self.action_space = spaces.Box(
+            low=-0.1, high=255.1, shape=(4,), dtype=np.float64
+        )
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self._render_mode = render_mode
@@ -95,18 +97,12 @@ class UR5eEnv(gym.Env):
 
     def _get_obs(self) -> np.ndarray:
         # TODO come up with an observations that makes sense for your RL task
-        return np.zeros(6)
+        # print(dir(self._arm.eef_site))
+        return self._arm.get_eef_pose(self._physics)
 
     def _get_info(self) -> dict:
         # TODO come up with an info dict that makes sense for your RL task
         return {}
-
-    def close_grip(self):
-        self._griper_actuator.ctrl = 250
-        # self._physics.data.actuator("ur5e/fingers_actuator").ctrl = 250
-
-    def open_grip(self):
-        self._griper_actuator.ctrl = 250
 
     def reset(self, seed=None, options=None) -> tuple:
         super().reset(seed=seed)
@@ -121,15 +117,6 @@ class UR5eEnv(gym.Env):
                 -1.5707,
                 -1.5707,
                 0.0,
-                # KC:
-                # 0.0,
-                # 0.0,
-                # 0.0,
-                # 0.0,
-                # 0.0,
-                # 0.0,
-                # 0.0,
-                # 0.0,
             ]
             # put target in a reasonable starting position
             self._target.set_mocap_pose(
@@ -142,10 +129,8 @@ class UR5eEnv(gym.Env):
         return observation, info
 
     def step(self, action: np.ndarray) -> tuple:
-        # TODO use the action to control the arm
-
-        # get mocap target pose
-        target_pose = self._target.get_mocap_pose(self._physics)
+        target_pose = action[:3] + [0, 0, 0, 1]
+        self._griper_actuator.ctrl = action[3]
 
         # run OSC controller to move to target pose
         self._controller.run(target_pose)
