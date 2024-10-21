@@ -7,11 +7,12 @@ import gymnasium as gym
 from gymnasium import spaces
 from manipulator_mujoco.arenas import StandardArena
 from manipulator_mujoco.robots import Arm
+from manipulator_mujoco.props import Primitive
 from manipulator_mujoco.mocaps import Target
 from manipulator_mujoco.controllers import OperationalSpaceController
 
-class UR5eEnv(gym.Env):
 
+class UR5eEnv(gym.Env):
     metadata = {
         "render_modes": ["human", "rgb_array"],
         "render_fps": None,
@@ -24,9 +25,7 @@ class UR5eEnv(gym.Env):
         )
 
         # TODO come up with an action space that makes sense
-        self.action_space = spaces.Box(
-            low=-0.1, high=0.1, shape=(6,), dtype=np.float64
-        )
+        self.action_space = spaces.Box(low=-0.1, high=0.1, shape=(4,), dtype=np.float64)
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self._render_mode = render_mode
@@ -34,7 +33,7 @@ class UR5eEnv(gym.Env):
         ############################
         # create MJCF model
         ############################
-        
+
         # checkerboard floor
         self._arena = StandardArena()
 
@@ -43,26 +42,40 @@ class UR5eEnv(gym.Env):
 
         # ur5e arm
         self._arm = Arm(
-            xml_path= os.path.join(
+            xml_path=os.path.join(
                 os.path.dirname(__file__),
-                '../assets/robots/ur5e/ur5e.xml',
+                "../assets/robots/ur5e/ur5e.xml",
             ),
-            eef_site_name='eef_site',
-            attachment_site_name='attachment_site'
+            eef_site_name="eef_site",
+            attachment_site_name="attachment_site",
         )
 
         # attach arm to arena
         self._arena.attach(
-            self._arm.mjcf_model, pos=[0,0,0], quat=[0.7071068, 0, 0, -0.7071068]
+            self._arm.mjcf_model, pos=[0, 0, 0], quat=[0.7071068, 0, 0, -0.7071068]
         )
-       
+
+        self._box = Primitive(
+            type="box",
+            size=[0.02, 0.02, 0.02],
+            pos=[0, 0, 0.02],
+            rgba=[1, 0, 0, 1],
+            friction=[1, 0.3, 0.0001],
+        )
+
+        # attach box to arena as free joint
+        # TODO: set random position
+        self._random_box_pos = [0.5, 0, 0.2]
+        self._arena.attach_free(
+            self._box.mjcf_model,
+            pos=[self._random_box_pos[0], self._random_box_pos[1], 0],
+        )
         # generate model
         self._physics = mjcf.Physics.from_mjcf_model(self._arena.mjcf_model)
 
-        # set up OSC controller
         self._controller = OperationalSpaceController(
             physics=self._physics,
-            joints=self._arm.joints,
+            joints=self._arm.joints[:6],
             eef_site=self._arm.eef_site,
             min_effort=-150.0,
             max_effort=150.0,
@@ -72,6 +85,8 @@ class UR5eEnv(gym.Env):
             vmax_xyz=1.0,
             vmax_abg=2.0,
         )
+
+        self._griper_actuator = self._physics.data.actuator("ur5e/fingers_actuator")
 
         # for GUI and time keeping
         self._timestep = self._physics.model.opt.timestep
@@ -86,22 +101,40 @@ class UR5eEnv(gym.Env):
         # TODO come up with an info dict that makes sense for your RL task
         return {}
 
+    def close_grip(self):
+        self._griper_actuator.ctrl = 250
+        # self._physics.data.actuator("ur5e/fingers_actuator").ctrl = 250
+
+    def open_grip(self):
+        self._griper_actuator.ctrl = 250
+
     def reset(self, seed=None, options=None) -> tuple:
         super().reset(seed=seed)
 
         # reset physics
         with self._physics.reset_context():
             # put arm in a reasonable starting position
-            self._physics.bind(self._arm.joints).qpos = [
+            self._physics.bind(self._arm.joints[:6]).qpos = [
                 0.0,
                 -1.5707,
                 1.5707,
                 -1.5707,
                 -1.5707,
                 0.0,
+                # KC:
+                # 0.0,
+                # 0.0,
+                # 0.0,
+                # 0.0,
+                # 0.0,
+                # 0.0,
+                # 0.0,
+                # 0.0,
             ]
             # put target in a reasonable starting position
-            self._target.set_mocap_pose(self._physics, position=[0.5, 0, 0.3], quaternion=[0, 0, 0, 1])
+            self._target.set_mocap_pose(
+                self._physics, position=[0.5, 0, 0.1], quaternion=[0, 0, 0, 1]
+            )
 
         observation = self._get_obs()
         info = self._get_info()
@@ -123,7 +156,7 @@ class UR5eEnv(gym.Env):
         # render frame
         if self._render_mode == "human":
             self._render_frame()
-        
+
         # TODO come up with a reward, termination function that makes sense for your RL task
         observation = self._get_obs()
         reward = 0

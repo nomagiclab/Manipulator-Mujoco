@@ -10,6 +10,7 @@ from manipulator_mujoco.props import Primitive
 from manipulator_mujoco.mocaps import Target
 from manipulator_mujoco.controllers import OperationalSpaceController
 
+
 class AuboI5Env(gym.Env):
 
     metadata = {
@@ -19,14 +20,13 @@ class AuboI5Env(gym.Env):
 
     def __init__(self, render_mode=None):
         # TODO come up with an observation space that makes sense
+        self.step_count = 0
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(6,), dtype=np.float64
         )
 
         # TODO come up with an action space that makes sense
-        self.action_space = spaces.Box(
-            low=-0.1, high=0.1, shape=(6,), dtype=np.float64
-        )
+        self.action_space = spaces.Box(low=-0.1, high=0.1, shape=(6,), dtype=np.float64)
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self._render_mode = render_mode
@@ -34,7 +34,7 @@ class AuboI5Env(gym.Env):
         ############################
         # create MJCF model
         ############################
-        
+
         # checkerboard floor
         self._arena = StandardArena()
 
@@ -43,26 +43,35 @@ class AuboI5Env(gym.Env):
 
         # aubo i5 arm
         self._arm = AuboI5()
-        
+
         # ag95 gripper
         self._gripper = AG95()
 
         # attach gripper to arm
-        self._arm.attach_tool(self._gripper.mjcf_model, pos=[0, 0, 0], quat=[0, 0, 0, 1])
+        self._arm.attach_tool(
+            self._gripper.mjcf_model, pos=[0, 0, 0], quat=[0, 0, 0, 1]
+        )
 
         # small box to be manipulated
-        self._box = Primitive(type="box", size=[0.02, 0.02, 0.02], pos=[0,0,0.02], rgba=[1, 0, 0, 1], friction=[1, 0.3, 0.0001])
-
-        # attach arm to arena
-        self._arena.attach(
-            self._arm.mjcf_model, pos=[0,0,0]
+        self._box = Primitive(
+            type="box",
+            size=[0.02, 0.02, 0.02],
+            pos=[0, 0, 0.02],
+            rgba=[1, 0, 0, 1],
+            friction=[1, 0.3, 0.0001],
         )
+        # attach arm to arena
+        self._arena.attach(self._arm.mjcf_model, pos=[0, 0, 0])
 
         # attach box to arena as free joint
+        # TODO: set random position
+        self._random_box_pos = np.random.uniform(-0.2, 0.2, size=2)
+        self._random_box_pos[0] += 0.5
         self._arena.attach_free(
-            self._box.mjcf_model, pos=[0.5,0,0]
+            self._box.mjcf_model,
+            pos=[self._random_box_pos[0], self._random_box_pos[1], 0],
         )
-       
+
         # generate model
         self._physics = mjcf.Physics.from_mjcf_model(self._arena.mjcf_model)
 
@@ -87,6 +96,7 @@ class AuboI5Env(gym.Env):
 
     def _get_obs(self) -> np.ndarray:
         # TODO come up with an observations that makes sense for your RL task
+
         return np.zeros(6)
 
     def _get_info(self) -> dict:
@@ -95,13 +105,27 @@ class AuboI5Env(gym.Env):
 
     def reset(self, seed=None, options=None) -> tuple:
         super().reset(seed=seed)
-
+        self._random_box_pos = np.random.uniform(-0.2, 0.2, size=2)
+        self._random_box_pos[0] += 0.5
+        print(self._random_box_pos)
+        self._box.mjcf_model.remove()
+        # self._arena.attach_free(
+        #    self._box.mjcf_model,
+        #    pos=[self._random_box_pos[0], self._random_box_pos[1], 0],
+        # )
         # reset physics
         with self._physics.reset_context():
             # put arm in a reasonable starting position
             self._physics.bind(self._arm.joints).qpos = [0, 0, 1.5707, 0, 1.5707, 0]
             # put target in a reasonable starting position
-            self._target.set_mocap_pose(self._physics, position=[0.5, 0, 0.04], quaternion=[0, 0, 0, 1])
+            # self._target.set_mocap_pose(
+            #    self._physics, position=[0.5, 0.1, 0.04], quaternion=[0, 0, 0, 1]
+            # )
+            self._target.set_mocap_pose(
+                self._physics,
+                position=[self._random_box_pos[0], self._random_box_pos[1], 0.04],
+                quaternion=[0, 0, 0, 1],
+            )
 
         observation = self._get_obs()
         info = self._get_info()
@@ -123,11 +147,21 @@ class AuboI5Env(gym.Env):
         # render frame
         if self._render_mode == "human":
             self._render_frame()
-        
+
         # TODO come up with a reward, termination function that makes sense for your RL task
         observation = self._get_obs()
         reward = 0
         terminated = False
+        if self.step_count == 1:
+            print(dir(self._gripper.mjcf_model.actuator))
+            import sys
+
+            sys.exit()
+
+        if self.step_count > 1000:
+            print("Terminated")
+            self.step_count = 0
+            terminated = True
         info = self._get_info()
 
         return observation, reward, terminated, False, info
@@ -146,6 +180,7 @@ class AuboI5Env(gym.Env):
         """
         Renders the current frame and updates the viewer if the render mode is set to "human".
         """
+        self.step_count += 1
         if self._viewer is None and self._render_mode == "human":
             # launch viewer
             self._viewer = mujoco.viewer.launch_passive(

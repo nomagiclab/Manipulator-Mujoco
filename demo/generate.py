@@ -1,3 +1,4 @@
+import tasks
 import pickle
 import gymnasium
 import manipulator_mujoco
