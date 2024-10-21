@@ -104,6 +104,13 @@ class UR5eEnv(gym.Env):
         # TODO come up with an info dict that makes sense for your RL task
         return {}
 
+    def close_grip(self):
+        self._griper_actuator.ctrl = 250
+        # self._physics.data.actuator("ur5e/fingers_actuator").ctrl = 250
+
+    def open_grip(self):
+        self._griper_actuator.ctrl = 250
+
     def reset(self, seed=None, options=None) -> tuple:
         super().reset(seed=seed)
 
@@ -117,6 +124,15 @@ class UR5eEnv(gym.Env):
                 -1.5707,
                 -1.5707,
                 0.0,
+                # KC:
+                # 0.0,
+                # 0.0,
+                # 0.0,
+                # 0.0,
+                # 0.0,
+                # 0.0,
+                # 0.0,
+                # 0.0,
             ]
             # put target in a reasonable starting position
             self._target.set_mocap_pose(
