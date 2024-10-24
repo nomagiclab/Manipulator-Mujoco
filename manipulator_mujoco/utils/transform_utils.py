@@ -7,6 +7,7 @@ NOTE: convention for quaternions is (x, y, z, w)
 import math
 
 import numpy as np
+from scipy.spatial.transform import Rotation as R
 
 PI = np.pi
 EPS = np.finfo(float).eps * 4.0
@@ -562,6 +563,19 @@ def euler2quat(euler):
     z = cr * cp * sy - sr * sp * cy
 
     return np.array([x, y, z, w], dtype=np.float32)
+
+def quat2euler(quat, degrees=False):
+    """
+    Convert quaternion to Euler angles using scipy.
+
+    Args:
+        quat (np.array): (x, y, z, w) quaternion
+
+    Returns:
+        np.array: (roll, pitch, yaw) Euler angles in radians
+    """
+    r = R.from_quat(quat)
+    return r.as_euler('xyz', degrees=degrees)
 
 
 def pose_in_A_to_pose_in_B(pose_A, pose_A_in_B):

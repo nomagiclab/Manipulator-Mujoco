@@ -10,6 +10,7 @@ from manipulator_mujoco.robots import Arm
 from manipulator_mujoco.props import Primitive
 from manipulator_mujoco.mocaps import Target
 from manipulator_mujoco.controllers import OperationalSpaceController
+from manipulator_mujoco.utils.transform_utils import quat2euler, euler2quat
 
 
 class UR5eEnv(gym.Env):
@@ -95,6 +96,16 @@ class UR5eEnv(gym.Env):
         self._viewer = None
         self._step_start = None
 
+    def get_observation(self):
+        # Here a collect trajectory script needs a dict with "robot_state" key
+        cartesian_position = self._arm.get_eef_pose(self._physics)
+        pos = cartesian_position[:3]
+        quat = cartesian_position[3:]
+        euler = quat2euler(quat)
+        cartesian_position_euler = np.concatenate([pos, euler])
+        
+        return {"timestamp": {}, "robot_state": {"cartesian_position": cartesian_position_euler}}
+
     def _get_obs(self) -> np.ndarray:
         # TODO come up with an observations that makes sense for your RL task
         # print(dir(self._arm.eef_site))
@@ -111,7 +122,7 @@ class UR5eEnv(gym.Env):
     def open_grip(self):
         self._griper_actuator.ctrl = 250
 
-    def reset(self, seed=None, options=None) -> tuple:
+    def reset(self, seed=None, options=None, randomize=False) -> tuple:
         super().reset(seed=seed)
 
         # reset physics
@@ -145,8 +156,13 @@ class UR5eEnv(gym.Env):
         return observation, info
 
     def step(self, action: np.ndarray) -> tuple:
-        target_pose = action[:3] + [0, 0, 0, 1]
-        self._griper_actuator.ctrl = action[3]
+        target_pos = action[:3]
+        target_euler = action[3:]
+        # target_griper = action[-1]
+        
+        target_quat = euler2quat(target_euler)
+        target_pose = np.concatenate([target_pos, target_quat])
+        # self._griper_actuator.ctrl = action[3]
 
         # run OSC controller to move to target pose
         self._controller.run(target_pose)
