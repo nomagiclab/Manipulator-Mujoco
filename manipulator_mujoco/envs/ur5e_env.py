@@ -96,6 +96,26 @@ class UR5eEnv(gym.Env):
         self._viewer = None
         self._step_start = None
 
+    def get_gripper_closed_value(self):
+        """
+        Calculates the normalized value representing the closeness of the gripper.
+        
+        1 means the gripper is fully closed and 0 means the gripper is fully open.
+
+        Returns:
+            float: A normalized value between 0 and 1 representing the closeness of the gripper.
+        """
+        right_driver_joint = self._arm._mjcf_root.find("joint", "right_driver_joint")
+        left_driver_joint = self._arm._mjcf_root.find("joint", "left_driver_joint")
+
+        right_driver_pos = self._physics.bind(right_driver_joint).qpos[0]
+        left_driver_pos = self._physics.bind(left_driver_joint).qpos[0]
+
+        gripper_closed_value = (right_driver_pos + left_driver_pos) / 2
+        gripper_closed_value = np.clip(gripper_closed_value, 0, 0.8) / 0.8
+
+        return gripper_closed_value
+
     def get_observation(self):
         # Here a collect trajectory script needs a dict with "robot_state" key
         cartesian_position = self._arm.get_eef_pose(self._physics)
@@ -103,8 +123,14 @@ class UR5eEnv(gym.Env):
         quat = cartesian_position[3:]
         euler = quat2euler(quat)
         cartesian_position_euler = np.concatenate([pos, euler])
-        
-        return {"timestamp": {}, "robot_state": {"cartesian_position": cartesian_position_euler}}
+
+        return {
+            "timestamp": {},
+            "robot_state": {
+                "cartesian_position": cartesian_position_euler,
+                "gripper_position": self.get_gripper_closed_value(),
+            },
+        }
 
     def _get_obs(self) -> np.ndarray:
         # TODO come up with an observations that makes sense for your RL task
@@ -120,7 +146,7 @@ class UR5eEnv(gym.Env):
         # self._physics.data.actuator("ur5e/fingers_actuator").ctrl = 250
 
     def open_grip(self):
-        self._griper_actuator.ctrl = 250
+        self._griper_actuator.ctrl = 0
 
     def reset(self, seed=None, options=None, randomize=False) -> tuple:
         super().reset(seed=seed)
@@ -156,13 +182,23 @@ class UR5eEnv(gym.Env):
         return observation, info
 
     def step(self, action: np.ndarray) -> tuple:
-        target_pos = action[:3]
-        target_euler = action[3:]
-        # target_griper = action[-1]
         
+        # The following code assumes:
+        # action[:3] x, y, z target position in cartesian space
+        # action[3:6] euler angles target orientation in cartesian space
+        # action[6] gripper action 1 means close, 0 means open
+        
+        target_position = action[:3]
+        target_euler = action[3:6]
+
         target_quat = euler2quat(target_euler)
-        target_pose = np.concatenate([target_pos, target_quat])
-        # self._griper_actuator.ctrl = action[3]
+        target_pose = np.concatenate([target_position, target_quat])
+
+        gripper_action = action[-1]
+        if gripper_action > 0.5:
+            self.close_grip()
+        else:
+            self.open_grip()
 
         # run OSC controller to move to target pose
         self._controller.run(target_pose)
