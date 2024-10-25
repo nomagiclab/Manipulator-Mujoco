@@ -139,6 +139,22 @@ self._physics.step()
 
 The OperationalSpaceController and Arm classes handle the details of tracking the mjcf element IDs, eliminating the need to specify joint names or actuator names. It should work seamlessly with any robot arm model, including various joint types, as long as the actuators are removed from the model since the controller automatically applies torques to each joint.
 
+## VR Control
+
+### Set up environment
+Don't use conda.
+```
+
+git clone git@github.com:adambiel22/droid.git
+
+pip install /path/to/droid
+pip install /path/to/mujoco-manipulator
+pip install /path/to/oculus-reader
+pip install -U mujoco
+pip install -U dm-control
+pip install pydot
+```
+
 ## Inspiration
 
 This repository drew inspiration from the following repositories:
