@@ -60,18 +60,38 @@ class UR5eEnv(gym.Env):
         self._box = Primitive(
             type="box",
             size=[0.02, 0.02, 0.02],
-            pos=[0, 0, 0.02],
+            pos=[0, 0, 0],
             rgba=[1, 0, 0, 1],
             friction=[1, 0.3, 0.0001],
         )
 
-        # attach box to arena as free joint
-        # TODO: set random position
-        self._random_box_pos = [0.5, 0, 0.2]
+        self._random_box_pos = [
+            np.random.uniform(0.3, 0.8),
+            np.random.uniform(-0.2, 0.2),
+            0.2,
+        ]
         self._arena.attach_free(
             self._box.mjcf_model,
             pos=[self._random_box_pos[0], self._random_box_pos[1], 0],
         )
+
+        for i in range(4):
+            distractor = Primitive(
+                type="box",
+                size=[0.02, 0.02, 0.02],
+                pos=[0, 0, 0],
+                rgba=[0, 1, 0, 1],
+                friction=[1, 0.3, 0.0001],
+            )
+            pos = self._random_box_pos.copy()
+            while np.linalg.norm(np.array(pos) - np.array(self._random_box_pos)) < 0.1:
+                pos = [
+                    np.random.uniform(0.3, 0.8),
+                    np.random.uniform(-0.2, 0.2),
+                    0.2,
+                ]
+            self._arena.attach_free(distractor.mjcf_model, pos=pos)
+
         # generate model
         self._physics = mjcf.Physics.from_mjcf_model(self._arena.mjcf_model)
 
@@ -98,11 +118,12 @@ class UR5eEnv(gym.Env):
     def _get_obs(self) -> np.ndarray:
         # TODO come up with an observations that makes sense for your RL task
         # print(dir(self._arm.eef_site))
+        # TODO KC: finish
         return self._arm.get_eef_pose(self._physics)
 
     def _get_info(self) -> dict:
-        # TODO come up with an info dict that makes sense for your RL task
-        return {}
+        print(self._physics.data.camera("ur5e/wrist_camera"))
+        return {"box_pos": self._random_box_pos}
 
     def close_grip(self):
         self._griper_actuator.ctrl = 250
@@ -124,15 +145,6 @@ class UR5eEnv(gym.Env):
                 -1.5707,
                 -1.5707,
                 0.0,
-                # KC:
-                # 0.0,
-                # 0.0,
-                # 0.0,
-                # 0.0,
-                # 0.0,
-                # 0.0,
-                # 0.0,
-                # 0.0,
             ]
             # put target in a reasonable starting position
             self._target.set_mocap_pose(
@@ -180,6 +192,7 @@ class UR5eEnv(gym.Env):
         """
         Renders the current frame and updates the viewer if the render mode is set to "human".
         """
+        print(self._physics.render())
         if self._viewer is None and self._render_mode == "human":
             # launch viewer
             self._viewer = mujoco.viewer.launch_passive(
@@ -201,7 +214,7 @@ class UR5eEnv(gym.Env):
 
             self._step_start = time.time()
 
-        else:  # rgb_array
+        else:  # rgb_array)
             return self._physics.render()
 
     def close(self) -> None:
