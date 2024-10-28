@@ -214,8 +214,8 @@ class UR5eEnv(gym.Env):
 
             self._step_start = time.time()
 
-        else:  # rgb_array)
-            return self._physics.render()
+        else:  # rgb_array
+            return self._physics.render(camera_id="ur5e/wrist_camera")
 
     def close(self) -> None:
         """
