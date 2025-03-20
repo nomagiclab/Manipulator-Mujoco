@@ -146,13 +146,20 @@ Don't use conda.
 ```
 
 git clone git@github.com:adambiel22/droid.git
+git clone git@github.com:rail-berkeley/oculus_reader.git
 
 pip install /path/to/droid
-pip install /path/to/mujoco-manipulator
+pip install /path/to/manipulator-mujoco
 pip install /path/to/oculus-reader
 pip install -U mujoco
 pip install -U dm-control
 pip install pydot
+```
+
+### Run demo
+
+```
+python demo/vr_demo.py
 ```
 
 ## Inspiration
